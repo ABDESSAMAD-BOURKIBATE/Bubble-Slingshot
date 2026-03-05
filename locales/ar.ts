@@ -15,7 +15,10 @@ export const ar = {
   close: "إغلاق",
   restartLevel: "إعادة تشغيل المستوى",
   goToDashboard: "الذهاب إلى لوحة التحكم",
-  
+  menu: "القائمة",
+  fullscreen: "تكبير الشاشة",
+  exit: "خروج",
+
   // Dashboard & Menu
   dashboard: "لوحة التحكم",
   campaignProgress: "تقدم الحملة",
@@ -25,7 +28,7 @@ export const ar = {
   playerAnalysis: "تحليل اللاعب",
   systemLogs: "سجلات النظام",
   leaderboard: "قائمة المتصدرين",
-  
+
   // Performance Chart
   performanceTrends: "اتجاهات الأداء",
   stress: "التوتر",
@@ -36,16 +39,16 @@ export const ar = {
   sea: "البحر",
   island: "الجزيرة",
   volcano: "البركان",
-  
+
   // Difficulty
   easy: "سهل",
   medium: "متوسط",
   hard: "صعب",
-  
+
   // Levels
   level: "مستوى",
   nextUnlock: "الفتح القادم عند مستوى",
-  
+
   // Analysis Modal
   analysis: "التحليل",
   playerState: "حالة اللاعب",
@@ -58,11 +61,11 @@ export const ar = {
   monitoringSignals: "مراقبة إشارات تفاعل اللاعب",
   live: "مباشر",
   closeMonitor: "إغلاق المراقب",
-  
+
   // Analysis Descriptions
   loadDesc: "الكثافة العالية تزيد من إرهاق اتخاذ القرار.",
   iqDesc: "يتم الحساب بناءً على الكفاءة، الهدوء تحت الضغط، والتقدم.",
-  
+
   // Archetypes
   archetype_Visionary: "صاحب رؤية",
   archetype_ClutchPlayer: "منقذ المواقف",
@@ -79,7 +82,7 @@ export const ar = {
   yellow: "أصفر",
   purple: "أرجواني",
   orange: "برتقالي",
-  
+
   // Debug
   engineStatus: "حالة المحرك",
   analyzing: "جاري تحليل المشهد...",

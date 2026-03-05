@@ -15,7 +15,10 @@ export const en = {
   close: "Close",
   restartLevel: "Restart Level",
   goToDashboard: "Go to Dashboard",
-  
+  menu: "Menu",
+  fullscreen: "Fullscreen",
+  exit: "Exit",
+
   // Dashboard & Menu
   dashboard: "Dashboard",
   campaignProgress: "Campaign Progress",
@@ -25,27 +28,27 @@ export const en = {
   playerAnalysis: "Player Analysis",
   systemLogs: "System Logs",
   leaderboard: "Leaderboard",
-  
+
   // Performance Chart
   performanceTrends: "Performance Trends",
   stress: "Stress",
   focus: "Focus",
   events: "Events",
-  
+
   // Stages
   sea: "Sea",
   island: "Island",
   volcano: "Volcano",
-  
+
   // Difficulty
   easy: "Easy",
   medium: "Medium",
   hard: "Hard",
-  
+
   // Levels
   level: "Level",
   nextUnlock: "Next Unlock at Level",
-  
+
   // Analysis Modal
   analysis: "Analysis",
   playerState: "Player State",
@@ -58,11 +61,11 @@ export const en = {
   monitoringSignals: "Monitoring player engagement signals",
   live: "Live",
   closeMonitor: "Close Monitor",
-  
+
   // Analysis Descriptions
   loadDesc: "High density increases decision fatigue.",
   iqDesc: "Calculated based on efficiency, calm under pressure, and progression.",
-  
+
   // Archetypes
   archetype_Visionary: "Visionary",
   archetype_ClutchPlayer: "Clutch Player",
@@ -79,7 +82,7 @@ export const en = {
   yellow: "Yellow",
   purple: "Purple",
   orange: "Orange",
-  
+
   // Debug
   engineStatus: "Engine Status",
   analyzing: "ANALYZING SCENE...",

@@ -9,15 +9,39 @@ import { playShootSound, playPopSound, playLandSound, playUiClick } from '../ser
 import { Point, Bubble, Particle, BubbleColor, DebugInfo, DifficultyLevel, MetricPoint } from '../types';
 import { Loader2, Trophy, BrainCircuit, Play, MousePointerClick, Eye, Terminal, AlertTriangle, Target, Lightbulb, Monitor, Gauge, X, Zap, RefreshCw, Menu, BarChart3, Settings, Info, Waves, Anchor, Flame, Map, ChevronRight, Star, Lock, Clock, AlertOctagon, Activity, Heart, Brain, Timer, PieChart, Sparkles, Languages, TrendingUp } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import bubbleSlingshotIcon from '/bubble_slingshot_icon.png';
+
 
 const PINCH_THRESHOLD = 0.05;
 const GRAVITY = 0.0;
 const FRICTION = 0.998;
 
-const BUBBLE_RADIUS = 22;
-const ROW_HEIGHT = BUBBLE_RADIUS * Math.sqrt(3);
-const GRID_COLS = 12;
-const SLINGSHOT_BOTTOM_OFFSET = 220;
+// Responsive bubble configuration
+const getResponsiveConfig = (width: number) => {
+    // Mobile: < 768px, Tablet: 768-1024px, Desktop: > 1024px
+    if (width < 768) {
+        // Mobile - Big bubbles, few columns to fill width
+        return {
+            BUBBLE_RADIUS: 22,
+            GRID_COLS: 8,
+            SLINGSHOT_BOTTOM_OFFSET: 180
+        };
+    } else if (width < 1024) {
+        // Tablet
+        return {
+            BUBBLE_RADIUS: 20,
+            GRID_COLS: 10,
+            SLINGSHOT_BOTTOM_OFFSET: 200
+        };
+    } else {
+        // Desktop
+        return {
+            BUBBLE_RADIUS: 22,
+            GRID_COLS: 12,
+            SLINGSHOT_BOTTOM_OFFSET: 220
+        };
+    }
+};
 
 const MAX_DRAG_DIST = 180;
 const MIN_FORCE_MULT = 0.15;
@@ -72,6 +96,7 @@ const GeminiSlingshot: React.FC = () => {
     // Progression Refs
     const lastDropTimeRef = useRef<number>(0);
     const gameStartTimeRef = useRef<number>(0);
+    const successfulShotsRef = useRef<number>(0);
 
     const aimTargetRef = useRef<Point | null>(null);
     const isAiThinkingRef = useRef<boolean>(false);
@@ -121,9 +146,42 @@ const GeminiSlingshot: React.FC = () => {
     // Menu State
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+    // Fullscreen State
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    const toggleFullscreen = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+            });
+            setIsFullscreen(true);
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+                setIsFullscreen(false);
+            }
+        }
+    };
+
+    // Screen size for responsive config
+    const [screenWidth, setScreenWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+
+    // Get responsive configuration based on current screen width
+    const config = getResponsiveConfig(screenWidth);
+    const { BUBBLE_RADIUS, GRID_COLS, SLINGSHOT_BOTTOM_OFFSET } = config;
+    const ROW_HEIGHT = BUBBLE_RADIUS * Math.sqrt(3);
+
+
     useEffect(() => {
         setAiHint(t('systemReady'));
     }, [t]);
+
+    // Track screen resize for responsive config
+    useEffect(() => {
+        const handleResize = () => setScreenWidth(window.innerWidth);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // Sync state to ref
     useEffect(() => {
@@ -185,6 +243,11 @@ const GeminiSlingshot: React.FC = () => {
 
     const toggleMenu = () => {
         playUiClick();
+        if (!isMenuOpen) {
+            // When opening the menu, ensure all other overlays are closed
+            setShowDebug(false);
+            setShowPsychology(false);
+        }
         setIsMenuOpen(!isMenuOpen);
     };
 
@@ -271,10 +334,12 @@ const GeminiSlingshot: React.FC = () => {
     }, [currentLevel, gameStage, t]); // Added dependencies
 
     const getBubblePos = (row: number, col: number, width: number) => {
-        const xOffset = (width - (GRID_COLS * BUBBLE_RADIUS * 2)) / 2 + BUBBLE_RADIUS;
+        const config = getResponsiveConfig(width);
+        const ROW_HEIGHT = config.BUBBLE_RADIUS * Math.sqrt(3);
+        const xOffset = (width - (config.GRID_COLS * config.BUBBLE_RADIUS * 2)) / 2 + config.BUBBLE_RADIUS;
         const isOdd = row % 2 !== 0;
-        const x = xOffset + col * (BUBBLE_RADIUS * 2) + (isOdd ? BUBBLE_RADIUS : 0);
-        const y = BUBBLE_RADIUS + row * ROW_HEIGHT;
+        const x = xOffset + col * (config.BUBBLE_RADIUS * 2) + (isOdd ? config.BUBBLE_RADIUS : 0);
+        const y = config.BUBBLE_RADIUS + row * ROW_HEIGHT;
         return { x, y };
     };
 
@@ -554,13 +619,13 @@ const GeminiSlingshot: React.FC = () => {
         ).then(aiResponse => {
             const { hint, debug } = aiResponse;
             setDebugInfo(debug);
-            setAiHint(hint.message);
-            setAiRationale(hint.rationale || null);
+            // setAiHint(hint.message); // Disable obtrusive text hint
+            // setAiRationale(hint.rationale || null); // Disable obtrusive rationale
 
             if (typeof hint.targetRow === 'number' && typeof hint.targetCol === 'number') {
                 if (hint.recommendedColor) {
                     setAiRecommendedColor(hint.recommendedColor);
-                    setSelectedColor(hint.recommendedColor);
+                    // setSelectedColor(hint.recommendedColor); // Subtly recommend without forcing
                 }
                 const pos = getBubblePos(hint.targetRow, hint.targetCol, canvasWidth);
                 setAimTarget(pos);
@@ -594,22 +659,34 @@ const GeminiSlingshot: React.FC = () => {
         }
 
         const grad = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, radius * 0.1, x, y, radius);
+        // Bright white specular highlight offset to the top-left
         grad.addColorStop(0, '#ffffff');
-        grad.addColorStop(0.2, baseColor);
-        grad.addColorStop(1, adjustColor(baseColor, -60));
+        // Smooth transition to the main color
+        grad.addColorStop(0.3, baseColor);
+        // Deep shadow at the bottom-right for 3D depth
+        grad.addColorStop(0.85, adjustColor(baseColor, -80));
+        grad.addColorStop(1, '#000000');
 
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fillStyle = grad;
         ctx.fill();
 
-        ctx.strokeStyle = adjustColor(baseColor, -80);
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        // Inner soft rim light to enhance glass feel
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 1.5;
+        // ctx.stroke(); // Removing harsh outline in favor of the inner gradient
 
+        // Sharp glossy reflection light on top
         ctx.beginPath();
-        ctx.ellipse(x - radius * 0.3, y - radius * 0.35, radius * 0.25, radius * 0.15, Math.PI / 4, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.ellipse(x - radius * 0.25, y - radius * 0.35, radius * 0.4, radius * 0.15, Math.PI / 6, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.fill();
+
+        // Secondary subtle reflection on bottom right
+        ctx.beginPath();
+        ctx.ellipse(x + radius * 0.3, y + radius * 0.3, radius * 0.2, radius * 0.1, -Math.PI / 4, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
         ctx.fill();
     };
 
@@ -654,15 +731,21 @@ const GeminiSlingshot: React.FC = () => {
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = 'rgba(18, 18, 18, 0.85)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Removed video rendering to show CSS background instead
 
             const now = performance.now();
             let dropInterval = Infinity;
 
             if (gameStage === 'island') dropInterval = 20000;
             if (gameStage === 'volcano') dropInterval = 10000;
+
+            // Dynamic Difficulty Adjustment based on stress
+            const lowestBubbleY = bubbles.current.reduce((max, b) => b.active ? Math.max(max, b.y) : max, 0);
+            const dangerY = anchorPos.current.y - 150;
+            const stressLevel = Math.min(100, Math.max(0, (lowestBubbleY / dangerY) * 100));
+            if (stressLevel > 80 && dropInterval !== Infinity) {
+                dropInterval *= 1.5; // Give player 50% more time if stressed
+            }
 
             if (!isMenuOpen && !isGameOver && dropInterval !== Infinity) {
                 const elapsed = now - lastDropTimeRef.current;
@@ -684,10 +767,18 @@ const GeminiSlingshot: React.FC = () => {
                 const idxTip = landmarks[8];
                 const thumbTip = landmarks[4];
 
-                handPos = {
-                    x: (idxTip.x * canvas.width + thumbTip.x * canvas.width) / 2,
-                    y: (idxTip.y * canvas.height + thumbTip.y * canvas.height) / 2
-                };
+                const rawHandX = (idxTip.x * canvas.width + thumbTip.x * canvas.width) / 2;
+                const rawHandY = (idxTip.y * canvas.height + thumbTip.y * canvas.height) / 2;
+
+                // Gesture Smoothing (Lerp)
+                if (isPinching.current && ballPos.current) {
+                    handPos = {
+                        x: ballPos.current.x + (rawHandX - ballPos.current.x) * 0.4,
+                        y: ballPos.current.y + (rawHandY - ballPos.current.y) * 0.4
+                    };
+                } else {
+                    handPos = { x: rawHandX, y: rawHandY };
+                }
 
                 const dx = idxTip.x - thumbTip.x;
                 const dy = idxTip.y - thumbTip.y;
@@ -746,6 +837,7 @@ const GeminiSlingshot: React.FC = () => {
                         x: dx * velocityMultiplier,
                         y: dy * velocityMultiplier
                     };
+                    successfulShotsRef.current += 1; // Increment successful shots
                 } else {
                     ballPos.current = { ...anchorPos.current };
                 }
@@ -867,118 +959,190 @@ const GeminiSlingshot: React.FC = () => {
             const currentAimTarget = aimTargetRef.current;
             const thinking = isAiThinkingRef.current;
             const currentSelected = selectedColorRef.current;
-            const shouldShowLine = currentAimTarget && !isFlying.current &&
-                (!aiRecommendedColor || aiRecommendedColor === currentSelected);
+            // Only show trajectory when actively pinching/aiming
+            const shouldShowLine = isPinching.current && !isFlying.current;
 
-            if (shouldShowLine || thinking) {
+            if (shouldShowLine) {
                 ctx.save();
-                const highlightColor = thinking ? '#a8c7fa' : COLOR_CONFIG[currentSelected].hex;
-
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = highlightColor;
+                const highlightColor = COLOR_CONFIG[currentSelected].hex;
 
                 ctx.beginPath();
                 ctx.moveTo(anchorPos.current.x, anchorPos.current.y);
-                if (currentAimTarget) {
-                    ctx.lineTo(currentAimTarget.x, currentAimTarget.y);
+
+                // Calculate trajectory based on current pull
+                const dx = anchorPos.current.x - ballPos.current.x;
+                const dy = anchorPos.current.y - ballPos.current.y;
+                const stretchDist = Math.sqrt(dx * dx + dy * dy);
+
+                if (stretchDist > 10) {
+                    // Simple linear trajectory prediction for visualization
+                    ctx.lineTo(anchorPos.current.x + dx * 5, anchorPos.current.y + dy * 5);
                 } else {
-                    ctx.lineTo(anchorPos.current.x, anchorPos.current.y - 200);
+                    ctx.lineTo(anchorPos.current.x, anchorPos.current.y - 100);
                 }
 
                 const time = performance.now();
                 const dashOffset = (time / 15) % 30;
-                ctx.setLineDash([20, 15]);
+                ctx.setLineDash([10, 15]); // Thinner, sparser dashes for subtlety
                 ctx.lineDashOffset = -dashOffset;
 
-                ctx.strokeStyle = thinking ? 'rgba(168, 199, 250, 0.5)' : highlightColor;
-                ctx.lineWidth = 4;
+                ctx.strokeStyle = `rgba(255, 255, 255, 0.4)`; // Subtle white line
+                ctx.lineWidth = 2;
                 ctx.stroke();
-
-                if (currentAimTarget && !thinking) {
-                    ctx.beginPath();
-                    ctx.arc(currentAimTarget.x, currentAimTarget.y, BUBBLE_RADIUS, 0, Math.PI * 2);
-                    ctx.setLineDash([5, 5]);
-                    ctx.strokeStyle = highlightColor;
-                    ctx.fillStyle = 'rgba(255,255,255,0.1)';
-                    ctx.fill();
-                    ctx.stroke();
-                }
 
                 ctx.restore();
             }
 
-            const bandColor = isPinching.current ? '#fdd835' : 'rgba(255,255,255,0.4)';
-            if (!isFlying.current) {
+            // Subtly glow the AI recommended target bubble
+            if (currentAimTarget && !thinking && aiRecommendedColor) {
+                ctx.save();
+                const highlightColor = COLOR_CONFIG[aiRecommendedColor].hex;
                 ctx.beginPath();
-                ctx.moveTo(anchorPos.current.x - 35, anchorPos.current.y - 10);
+                ctx.arc(currentAimTarget.x, currentAimTarget.y, BUBBLE_RADIUS + 5, 0, Math.PI * 2);
+                ctx.fillStyle = highlightColor;
+                ctx.globalAlpha = 0.3 + Math.sin(performance.now() / 200) * 0.2; // Pulsating glow
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // --- PREMIUM 3D SLINGSHOT LAUNCHER ---
+            ctx.save();
+            const bandColor = isPinching.current ? '#fdd835' : 'rgba(255,100,100,0.8)'; // Red-ish elastic
+
+            // Draw elastic band BACK part (behind the ball)
+            if (!isFlying.current) {
+                const backBandGradient = ctx.createLinearGradient(anchorPos.current.x - 45, anchorPos.current.y - 30, ballPos.current.x, ballPos.current.y);
+                backBandGradient.addColorStop(0, '#B71C1C'); // Dark Red
+                backBandGradient.addColorStop(1, '#FF7043'); // Bright Orange
+
+                ctx.beginPath();
+                ctx.moveTo(anchorPos.current.x - 45, anchorPos.current.y - 30); // Left tip
                 ctx.lineTo(ballPos.current.x, ballPos.current.y);
-                ctx.lineWidth = 5;
-                ctx.strokeStyle = bandColor;
+
+                // Dynamic width: thinner as you pull further
+                const stretchDist = Math.hypot(anchorPos.current.x - ballPos.current.x, anchorPos.current.y - ballPos.current.y);
+                ctx.lineWidth = Math.max(3, 8 - (stretchDist / 40));
+
+                ctx.strokeStyle = backBandGradient;
                 ctx.lineCap = 'round';
                 ctx.stroke();
             }
 
+            // Draw the Bubble (Loaded Ammunition)
             ctx.save();
             drawBubble(ctx, ballPos.current.x, ballPos.current.y, BUBBLE_RADIUS, selectedColorRef.current);
             ctx.restore();
 
+            // Draw elastic band FRONT part (in front of the ball)
             if (!isFlying.current) {
+                const frontBandGradient = ctx.createLinearGradient(anchorPos.current.x + 45, anchorPos.current.y - 30, ballPos.current.x, ballPos.current.y);
+                frontBandGradient.addColorStop(0, '#C62828');
+                frontBandGradient.addColorStop(1, '#FF8A65');
+
                 ctx.beginPath();
                 ctx.moveTo(ballPos.current.x, ballPos.current.y);
-                ctx.lineTo(anchorPos.current.x + 35, anchorPos.current.y - 10);
-                ctx.lineWidth = 5;
-                ctx.strokeStyle = bandColor;
+                ctx.lineTo(anchorPos.current.x + 45, anchorPos.current.y - 30); // Right tip
+
+                const stretchDist = Math.hypot(anchorPos.current.x - ballPos.current.x, anchorPos.current.y - ballPos.current.y);
+                ctx.lineWidth = Math.max(3, 8 - (stretchDist / 40));
+
+                ctx.strokeStyle = frontBandGradient;
                 ctx.lineCap = 'round';
                 ctx.stroke();
+
+                // Draw a small leather pouch holding the ball connecting the bands
+                ctx.beginPath();
+                ctx.arc(ballPos.current.x, ballPos.current.y + BUBBLE_RADIUS - 5, 8, 0, Math.PI, false);
+                ctx.fillStyle = '#4E342E'; // Leather brown
+                ctx.fill();
             }
 
-            const baseWidthBottom = 20;
-            const baseWidthTop = 10;
+            // --- Wooden Y-Fork Structure ---
 
-            const baseGradient = ctx.createLinearGradient(
-                anchorPos.current.x - baseWidthBottom, canvas.height,
-                anchorPos.current.x + baseWidthBottom, canvas.height
-            );
-            baseGradient.addColorStop(0, '#1a1a1a');
-            baseGradient.addColorStop(0.5, '#555');
-            baseGradient.addColorStop(1, '#1a1a1a');
-
-            ctx.beginPath();
-            ctx.moveTo(anchorPos.current.x - baseWidthBottom, canvas.height);
-            ctx.lineTo(anchorPos.current.x + baseWidthBottom, canvas.height);
-            ctx.lineTo(anchorPos.current.x + baseWidthTop, anchorPos.current.y + 45);
-            ctx.lineTo(anchorPos.current.x - baseWidthTop, anchorPos.current.y + 45);
-            ctx.closePath();
-            ctx.fillStyle = baseGradient;
-            ctx.fill();
-
-            ctx.strokeStyle = '#888';
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
+            // 1. Shadow underneath the launcher for 3D depth
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+            ctx.shadowBlur = 15;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 10;
 
             const forkGradient = ctx.createLinearGradient(
-                anchorPos.current.x, anchorPos.current.y + 45,
-                anchorPos.current.x, anchorPos.current.y
+                anchorPos.current.x - 30, anchorPos.current.y,
+                anchorPos.current.x + 30, anchorPos.current.y
             );
-            forkGradient.addColorStop(0, '#444');
-            forkGradient.addColorStop(1, '#999');
+            // Rich wood gradient
+            forkGradient.addColorStop(0, '#5D3A1A');
+            forkGradient.addColorStop(0.3, '#8B5E3C');
+            forkGradient.addColorStop(0.7, '#A06E49');
+            forkGradient.addColorStop(1, '#3E2108');
+
+            const baseWidthBottom = 22;
+            const baseWidthTop = 14;
 
             ctx.beginPath();
-            ctx.moveTo(anchorPos.current.x - baseWidthTop, anchorPos.current.y + 45);
+            // Start at bottom left base
+            ctx.moveTo(anchorPos.current.x - baseWidthBottom, canvas.height);
+            // Go to central split point (bottom of the Y)
+            ctx.lineTo(anchorPos.current.x - baseWidthTop, anchorPos.current.y + 30);
 
-            ctx.quadraticCurveTo(anchorPos.current.x - 35, anchorPos.current.y + 25, anchorPos.current.x - 45, anchorPos.current.y - 10);
-            ctx.lineTo(anchorPos.current.x - 35, anchorPos.current.y - 10); // Tip width
+            // Curve up to left tip
+            ctx.quadraticCurveTo(anchorPos.current.x - 45, anchorPos.current.y + 5, anchorPos.current.x - 55, anchorPos.current.y - 30);
+            // Left tip top edge (rounded)
+            ctx.arc(anchorPos.current.x - 45, anchorPos.current.y - 30, 10, Math.PI, 0);
 
-            ctx.quadraticCurveTo(anchorPos.current.x - 25, anchorPos.current.y + 25, anchorPos.current.x, anchorPos.current.y + 38);
+            // Curve back down to inner split
+            ctx.quadraticCurveTo(anchorPos.current.x - 20, anchorPos.current.y + 15, anchorPos.current.x, anchorPos.current.y + 25);
 
-            ctx.quadraticCurveTo(anchorPos.current.x + 25, anchorPos.current.y + 25, anchorPos.current.x + 35, anchorPos.current.y - 10);
-            ctx.lineTo(anchorPos.current.x + 45, anchorPos.current.y - 10);
-            ctx.quadraticCurveTo(anchorPos.current.x + 35, anchorPos.current.y + 25, anchorPos.current.x + baseWidthTop, anchorPos.current.y + 45);
+            // Curve up to inner right tip
+            ctx.quadraticCurveTo(anchorPos.current.x + 20, anchorPos.current.y + 15, anchorPos.current.x + 35, anchorPos.current.y - 30);
+            // Right tip top edge (rounded)
+            ctx.arc(anchorPos.current.x + 45, anchorPos.current.y - 30, 10, Math.PI, 0);
+
+            // Curve down to right base
+            ctx.quadraticCurveTo(anchorPos.current.x + 45, anchorPos.current.y + 5, anchorPos.current.x + baseWidthTop, anchorPos.current.y + 30);
+            // Go to bottom right base
+            ctx.lineTo(anchorPos.current.x + baseWidthBottom, canvas.height);
 
             ctx.closePath();
             ctx.fillStyle = forkGradient;
             ctx.fill();
+
+            // Disable shadow for details
+            ctx.shadowColor = 'transparent';
+
+            // Wood Grain/Highlight Details
+            ctx.beginPath();
+            ctx.moveTo(anchorPos.current.x - 5, canvas.height);
+            ctx.lineTo(anchorPos.current.x - 5, anchorPos.current.y + 30);
+            ctx.quadraticCurveTo(anchorPos.current.x - 35, anchorPos.current.y, anchorPos.current.x - 45, anchorPos.current.y - 25);
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'; // Soft highlight
             ctx.stroke();
+
+            // 2. Metal Caps at the tips where bands attach
+            const drawMetalCap = (x: number, y: number) => {
+                const metalGrad = ctx.createRadialGradient(x - 2, y - 2, 1, x, y, 6);
+                metalGrad.addColorStop(0, '#FFFFFF');
+                metalGrad.addColorStop(0.4, '#B0BEC5');
+                metalGrad.addColorStop(1, '#455A64');
+                ctx.beginPath();
+                ctx.arc(x, y, 6, 0, Math.PI * 2);
+                ctx.fillStyle = metalGrad;
+                ctx.fill();
+                ctx.strokeStyle = '#263238';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            };
+
+            drawMetalCap(anchorPos.current.x - 45, anchorPos.current.y - 30);
+            drawMetalCap(anchorPos.current.x + 45, anchorPos.current.y - 30);
+
+            // Base stand detail (shadow at bottom)
+            ctx.beginPath();
+            ctx.ellipse(anchorPos.current.x, canvas.height, 30, 5, 0, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            ctx.fill();
+
+            ctx.restore();
 
             for (let i = particles.current.length - 1; i >= 0; i--) {
                 const p = particles.current[i];
@@ -1080,19 +1244,147 @@ const GeminiSlingshot: React.FC = () => {
     const borderColor = recColorConfig ? recColorConfig.hex : '#444746';
 
     return (
-        <div className={`w-full h-screen bg-[#121212] overflow-hidden relative transition-transform duration-100 text-[#e3e3e3] ${shakeScreen ? 'translate-y-1' : ''}`}>
+        <div
+            className={`w-full h-screen overflow-hidden relative transition-transform duration-100 text-[#e3e3e3] ${shakeScreen ? 'translate-y-1' : ''}`}
+            style={{
+                backgroundImage: 'url(/background.png)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+            }}
+        >
 
             {/* FULL SCREEN GAME AREA */}
             <div ref={gameContainerRef} className="absolute inset-0 w-full h-full">
+                {/* Ambient dark overlay for perfect contrast */}
+                <div className="absolute inset-0 bg-black/30 backdrop-blur-[3px] pointer-events-none z-0"></div>
                 <video ref={videoRef} className="absolute hidden" playsInline />
-                <canvas ref={canvasRef} className="absolute inset-0" />
+                <canvas ref={canvasRef} className="absolute inset-0 z-10" />
 
-                {/* Loading Overlay (Only initial) */}
+                {/* Professional Loading Screen */}
                 {loading && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-[#121212] z-50">
-                        <div className="flex flex-col items-center">
-                            <Loader2 className="w-12 h-12 text-[#42a5f5] animate-spin mb-4" />
-                            <p className="text-[#e3e3e3] text-lg font-medium">{t('loading')}</p>
+                    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#0a0a09] via-[#1a1a2e] to-[#0f172a] z-50 overflow-hidden">
+                        {/* Animated Background Particles */}
+                        <div className="absolute inset-0 pointer-events-none">
+                            {[...Array(30)].map((_, i) => (
+                                <div
+                                    key={i}
+                                    className="absolute rounded-full opacity-30 animate-float"
+                                    style={{
+                                        width: `${Math.random() * 120 + 40}px`,
+                                        height: `${Math.random() * 120 + 40}px`,
+                                        left: `${Math.random() * 100}%`,
+                                        top: `${Math.random() * 100}%`,
+                                        background: `radial-gradient(circle, ${['#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#06b6d4'][Math.floor(Math.random() * 6)]}, transparent 70%)`,
+                                        animationDelay: `${Math.random() * 5}s`,
+                                        animationDuration: `${Math.random() * 15 + 15}s`,
+                                        boxShadow: '0 0 20px rgba(255,255,255,0.05)'
+                                    }}
+                                />
+                            ))}
+                        </div>
+
+                        {/* Main Loading Content with Glassmorphism */}
+                        <div className="relative z-10 flex flex-col items-center -translate-y-8 glass-panel py-12 px-16 rounded-[4rem] max-w-lg w-full">
+                            {/* Logo/Title Area */}
+                            <div className="mb-10 text-center relative">
+                                <div className="absolute inset-0 bg-blue-500/20 blur-[100px] rounded-full"></div>
+                                <div className="relative inline-block">
+                                    {/* Center Icon (Static, no outer rings) */}
+                                    <div className="relative w-32 h-32 flex items-center justify-center">
+                                        {/* Circular Icon Container */}
+                                        <div className="relative w-28 h-28 rounded-full overflow-hidden bg-black/50 backdrop-blur-md flex items-center justify-center shadow-[0_0_40px_rgba(139,92,246,0.6)] border border-white/20">
+                                            <img
+                                                src={bubbleSlingshotIcon}
+                                                alt="Bubble Slingshot"
+                                                className="w-full h-full object-contain object-center rounded-full"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                                <h1 className="font-title text-4xl sm:text-6xl font-normal mt-10 pb-4 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent animate-gradient drop-shadow-[0_0_20px_rgba(168,85,247,0.7)] tracking-wider whitespace-nowrap">
+                                    Bubble Slingshot
+                                </h1>
+                            </div>
+
+                            {/* Loading Animation */}
+                            <div className="flex flex-col items-center gap-8 w-full px-4">
+                                {/* Bubble Animation */}
+                                <div className="flex items-center justify-center gap-4">
+                                    {['#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b'].map((color, i) => (
+                                        <div
+                                            key={i}
+                                            className="w-4 h-4 rounded-full animate-bounce"
+                                            style={{
+                                                background: `radial-gradient(circle at 30% 30%, ${color}, ${adjustColor(color, -60)})`,
+                                                animationDelay: `${i * 0.15}s`,
+                                                boxShadow: `0 0 15px ${color}`
+                                            }}
+                                        />
+                                    ))}
+                                </div>
+
+                                {/* Progress Bar & Text */}
+                                <div className="w-full relative">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <p className="text-white text-sm font-bold flex items-center gap-2">
+                                            <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                                            <span className="tracking-wide text-white">{t('loading')}</span>
+                                        </p>
+                                        <p className="text-gray-400 text-xs font-mono tracking-widest animate-pulse uppercase">Initializing...</p>
+                                    </div>
+                                    <div className="w-full bg-black/60 rounded-full h-2.5 overflow-hidden backdrop-blur-sm border border-white/10 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)]">
+                                        <div className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-full animate-loading-bar shadow-[0_0_10px_rgba(168,85,247,0.8)]"></div>
+                                    </div>
+                                </div>
+
+                                {/* Premium Feature Hints Cards */}
+                                <div className="mt-4 w-full flex overflow-x-auto gap-4 pb-4 no-scrollbar sm:grid sm:grid-cols-3">
+                                    {/* AI Hints Card */}
+                                    <div className="flex-none w-32 sm:w-auto flex flex-col items-center gap-3 p-4 rounded-3xl glass-panel relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
+                                        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                        <div className="p-3 bg-purple-500/10 rounded-2xl border border-purple-500/20 group-hover:border-purple-400/40 shadow-[inset_0_0_10px_rgba(168,85,247,0.1)] transition-colors">
+                                            <BrainCircuit className="w-6 h-6 text-purple-400 drop-shadow-[0_0_10px_rgba(168,85,247,0.8)] group-hover:scale-110 transition-transform" />
+                                        </div>
+                                        <span className="text-[11px] text-gray-300 font-bold text-center uppercase tracking-widest relative z-10 group-hover:text-white transition-colors">AI Hints</span>
+                                    </div>
+
+                                    {/* Gestures Card */}
+                                    <div className="flex-none w-32 sm:w-auto flex flex-col items-center gap-3 p-4 rounded-3xl glass-panel relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
+                                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                        <div className="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20 group-hover:border-blue-400/40 shadow-[inset_0_0_10px_rgba(59,130,246,0.1)] transition-colors">
+                                            <Waves className="w-6 h-6 text-blue-400 drop-shadow-[0_0_10px_rgba(59,130,246,0.8)] group-hover:scale-110 transition-transform" />
+                                        </div>
+                                        <span className="text-[11px] text-gray-300 font-bold text-center uppercase tracking-widest relative z-10 group-hover:text-white transition-colors">Gestures</span>
+                                    </div>
+
+                                    {/* Stages Card */}
+                                    <div className="flex-none w-32 sm:w-auto flex flex-col items-center gap-3 p-4 rounded-3xl glass-panel relative overflow-hidden group hover:-translate-y-1 transition-all duration-300">
+                                        <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                        <div className="p-3 bg-yellow-500/10 rounded-2xl border border-yellow-500/20 group-hover:border-yellow-400/40 shadow-[inset_0_0_10px_rgba(234,179,8,0.1)] transition-colors">
+                                            <Trophy className="w-6 h-6 text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.8)] group-hover:scale-110 transition-transform z-10" />
+                                        </div>
+                                        <span className="text-[11px] text-gray-300 font-bold text-center uppercase tracking-widest relative z-10 group-hover:text-white transition-colors">Stages</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Bottom Copyright */}
+                        <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 text-center opacity-70 w-full px-4">
+                            <p className={`text-gray-400 text-[10px] sm:text-xs font-medium tracking-widest leading-relaxed ${isRTL ? 'font-arabic' : ''}`}>
+                                {isRTL ? (
+                                    <>جميع الحقوق محفوظة © {new Date().getFullYear()}</>
+                                ) : (
+                                    <>© {new Date().getFullYear()} ALL RIGHTS RESERVED</>
+                                )}
+                            </p>
+                            <p className={`text-blue-400/80 text-[10px] mt-2 font-bold tracking-[0.2em] uppercase neon-text-blue ${isRTL ? 'font-arabic' : ''}`}>
+                                {isRTL ? (
+                                    <>مطور: المهندس عبد الصمد بوركيبات</>
+                                ) : (
+                                    <>Developed by Abdessamad Bourkibate</>
+                                )}
+                            </p>
                         </div>
                     </div>
                 )}
@@ -1115,23 +1407,54 @@ const GeminiSlingshot: React.FC = () => {
                     </div>
                 )}
 
-                {/* CLEAN SCREEN - Professional Menu Button (Top Right) */}
-                <button
-                    onClick={toggleMenu}
-                    className={`absolute top-6 ${isRTL ? 'left-6' : 'right-6'} z-50 p-3 bg-black/30 backdrop-blur-md rounded-full border border-white/10 text-white shadow-lg hover:bg-black/50 transition-all active:scale-95 group`}
-                    title="Open Menu"
-                >
-                    <Menu className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
-                </button>
+                {/* HUD: Interaction Controls Row (Menu, Tips, Fullscreen) */}
+                {!loading && (
+                    <div className="absolute bottom-32 left-0 w-full px-6 z-50 flex items-center justify-between pointer-events-none">
+                        {/* LEFT: Menu / Control HUB */}
+                        <div className={`flex flex-1 ${isRTL ? 'justify-end' : 'justify-start'} pointer-events-auto`}>
+                            <button
+                                onClick={toggleMenu}
+                                className={`flex items-center justify-center gap-3 px-5 py-3 rounded-2xl glass-panel text-white/90 hover:bg-white/10 hover:shadow-[0_0_25px_rgba(139,92,246,0.6)] hover:border-purple-400/60 hover:-translate-y-1 transition-all duration-300 active:scale-95 group shadow-[inset_0_1px_rgba(255,255,255,0.1),0_5px_15px_rgba(0,0,0,0.5)]`}
+                                title="Open Menu"
+                            >
+                                <Menu className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500 text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em] neon-text-purple">
+                                    {t('menu')}
+                                </span>
+                            </button>
+                        </div>
+
+                        {/* CENTER: Empty for balance */}
+                        <div className="flex-1 flex justify-center pointer-events-none"></div>
+
+                        {/* RIGHT: System Utilities (Fullscreen) */}
+                        <div className={`flex flex-1 ${isRTL ? 'justify-start' : 'justify-end'} pointer-events-auto`}>
+                            <button
+                                onClick={toggleFullscreen}
+                                className={`flex items-center justify-center gap-3 px-5 py-3 rounded-2xl glass-panel text-white/90 hover:bg-white/10 hover:shadow-[0_0_25px_rgba(59,130,246,0.6)] hover:border-blue-400/60 hover:-translate-y-1 transition-all duration-300 active:scale-95 group shadow-[inset_0_1px_rgba(255,255,255,0.1),0_5px_15px_rgba(0,0,0,0.5)]`}
+                                title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                            >
+                                {isFullscreen ? (
+                                    <Monitor className="w-5 h-5 text-blue-400 group-hover:scale-110 transition-transform drop-shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+                                ) : (
+                                    <Zap className="w-5 h-5 text-yellow-400 group-hover:scale-110 transition-transform drop-shadow-[0_0_10px_rgba(234,179,8,0.8)]" />
+                                )}
+                                <span className="text-[10px] font-black uppercase tracking-[0.2em] neon-text-blue">
+                                    {isFullscreen ? t('exit') : t('fullscreen')}
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* HUD: Professional Glassmorphism Color Dock */}
-                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 w-full max-w-[95vw] md:max-w-auto flex justify-center">
-                    <div className="flex items-center gap-3 bg-black/30 backdrop-blur-xl px-5 py-3 rounded-full border border-white/10 shadow-2xl overflow-x-auto no-scrollbar pointer-events-auto">
-                        <div className="text-[10px] font-bold text-white/50 uppercase tracking-widest mr-2 hidden sm:block">
-                            {/* Visual spacer text */}
-                        </div>
+                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 w-full max-w-[95vw] md:max-w-auto flex justify-center pointer-events-none">
+                    <div className="flex items-center gap-4 glass-panel px-8 py-4 rounded-[2.5rem] overflow-x-auto no-scrollbar pointer-events-auto relative">
+                        {/* Ambient Glow behind dock */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 rounded-[2.5rem] blur-xl pointer-events-none"></div>
+
                         {availableColors.length === 0 ? (
-                            <p className="text-sm text-gray-400 font-medium px-4">{t('levelCleared')}</p>
+                            <p className="text-sm text-gray-300 font-bold px-8 tracking-widest uppercase neon-text-blue">{t('levelCleared')}</p>
                         ) : (
                             COLOR_KEYS.filter(c => availableColors.includes(c)).map(color => {
                                 const isSelected = selectedColor === color;
@@ -1142,31 +1465,34 @@ const GeminiSlingshot: React.FC = () => {
                                     <button
                                         key={color}
                                         onClick={() => handleColorSelect(color)}
-                                        className={`relative w-12 h-12 rounded-full transition-all duration-300 transform flex items-center justify-center group
-                                    ${isSelected ? 'scale-110' : 'opacity-70 hover:opacity-100 hover:scale-105'}
+                                        className={`relative w-10 h-10 rounded-full transition-all duration-500 transform flex items-center justify-center hover:-translate-y-2 group
+                                    ${isSelected ? 'scale-110 z-10' : 'opacity-70 hover:opacity-100 hover:scale-105'}
                                 `}
                                     >
                                         {/* Color Circle */}
                                         <div
-                                            className={`w-full h-full rounded-full shadow-inner ${isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-black/50' : ''}`}
+                                            className={`w-full h-full rounded-full shadow-[inset_0_-6px_10px_rgba(0,0,0,0.5),0_8px_15px_rgba(0,0,0,0.4)] transition-all duration-300
+                                                ${isSelected ? 'ring-4 ring-white/80 ring-offset-2 ring-offset-transparent' : 'ring-1 ring-white/20'}`}
                                             style={{
-                                                background: `radial-gradient(circle at 35% 35%, ${config.hex}, ${adjustColor(config.hex, -60)})`,
+                                                background: `radial-gradient(circle at 35% 25%, ${adjustColor(config.hex, 40)} 0%, ${config.hex} 40%, ${adjustColor(config.hex, -80)} 100%)`,
                                                 boxShadow: isSelected
-                                                    ? `0 0 20px ${config.hex}, inset 0 -4px 4px rgba(0,0,0,0.5)`
-                                                    : '0 4px 6px rgba(0,0,0,0.3), inset 0 -4px 4px rgba(0,0,0,0.3)'
+                                                    ? `0 0 25px ${config.hex}, inset 0 -3px 8px rgba(0,0,0,0.6)`
+                                                    : `0 6px 12px rgba(0,0,0,0.4), inset 0 -3px 6px rgba(0,0,0,0.5)`
                                             }}
                                         />
 
-                                        {/* Glossy Reflection */}
-                                        <div className="absolute top-2 left-3 w-4 h-2 bg-white/30 rounded-full transform -rotate-45 filter blur-[1px] pointer-events-none" />
+                                        {/* Super Glossy Glass Reflections */}
+                                        <div className="absolute inset-[1px] rounded-full border-[1.5px] border-white/50 pointer-events-none mix-blend-overlay" />
+                                        <div className="absolute top-0.5 left-1 w-5 h-3 bg-gradient-to-b from-white/90 to-transparent rounded-full transform -rotate-45 opacity-90 pointer-events-none mix-blend-overlay" />
+                                        <div className="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-white/40 blur-[1px] pointer-events-none" />
 
                                         {isRecommended && !isSelected && (
-                                            <span className="absolute -top-1 -right-1 w-5 h-5 bg-white text-black text-[10px] font-extrabold flex items-center justify-center rounded-full animate-bounce shadow-md z-20">!</span>
+                                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gradient-to-br from-yellow-300 to-yellow-600 text-black text-[10px] font-black flex items-center justify-center rounded-full shadow-[0_0_15px_rgba(234,179,8,0.8)] border border-yellow-200 animate-bounce z-20">!</span>
                                         )}
 
                                         {isSelected && (
-                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                                <MousePointerClick className="w-5 h-5 text-white drop-shadow-md" strokeWidth={2.5} />
+                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30 animate-pulse-glow">
+                                                <MousePointerClick className="w-6 h-6 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" strokeWidth={3} />
                                             </div>
                                         )}
                                     </button>
@@ -1175,6 +1501,16 @@ const GeminiSlingshot: React.FC = () => {
                         )}
                     </div>
                 </div>
+
+                {/* Pinch to Shoot Hint (Smaller, below the balls/dock) */}
+                {successfulShotsRef.current < 3 && !isPinching.current && !isFlying.current && !isAiThinking && !isMenuOpen && !isGameOver && (
+                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-1.5 rounded-full backdrop-blur-md bg-black/60 border border-white/10 shadow-[0_5px_15px_rgba(0,0,0,0.5)] transform animate-float-slow pointer-events-none">
+                        <div className="p-1 bg-blue-500/20 rounded-full animate-pulse">
+                            <Play className="w-2.5 h-2.5 text-blue-400 fill-current" />
+                        </div>
+                        <p className="text-white/80 text-[9px] font-black uppercase tracking-[0.2em]">{t('pinchToShoot')}</p>
+                    </div>
+                )}
 
                 {/* Tactical Guide Toast - AUTO HIDES - Professional Floating Pill */}
                 {aiHint && (
@@ -1198,45 +1534,37 @@ const GeminiSlingshot: React.FC = () => {
                     </div>
                 )}
 
-                {/* Bottom Tip - Minimalist */}
-                {!isPinching.current && !isFlying.current && !isAiThinking && !isMenuOpen && !isGameOver && (
-                    <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-30 pointer-events-none opacity-60">
-                        <div className="flex items-center gap-2 px-4 py-1.5 rounded-full backdrop-blur-sm bg-black/20 border border-white/5">
-                            <Play className="w-3 h-3 text-white/80 fill-current" />
-                            <p className="text-white/80 text-[10px] font-bold uppercase tracking-[0.2em]">{t('pinchToShoot')}</p>
-                        </div>
-                    </div>
-                )}
             </div>
 
             {/* GAME OVER MODAL */}
             {isGameOver && (
-                <div className="fixed inset-0 z-[70] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 animate-in zoom-in-95 duration-300">
-                    <div className="flex flex-col items-center gap-6 p-8 bg-[#18181b] border border-red-500/20 rounded-3xl shadow-2xl max-w-sm w-full text-center relative overflow-hidden">
+                <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-2xl flex items-center justify-center p-4 animate-in zoom-in-95 duration-300">
+                    <div className="flex flex-col items-center gap-6 p-8 bg-[#09090b] border border-red-500/30 rounded-[3rem] shadow-[0_0_50px_rgba(239,68,68,0.3)] max-w-sm w-full text-center relative overflow-hidden glass-panel">
                         {/* Ambient Red Glow */}
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-red-500 blur-xl"></div>
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-red-600/20 blur-[60px] rounded-full pointer-events-none"></div>
+                        <div className="absolute bottom-0 w-full h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-50"></div>
 
-                        <div className="p-4 bg-red-500/10 rounded-full mb-2">
-                            <AlertOctagon className="w-12 h-12 text-red-500" />
+                        <div className="p-5 bg-red-500/10 rounded-full mb-2 border border-red-500/20 shadow-[0_0_20px_rgba(239,68,68,0.2)] animate-pulse-glow">
+                            <AlertOctagon className="w-14 h-14 text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
                         </div>
 
-                        <div>
-                            <h2 className="text-3xl font-black text-white uppercase tracking-wider mb-2">{t('gameOver')}</h2>
-                            <p className="text-gray-400 font-medium">{t('dangerShrinking')}</p>
+                        <div className="relative z-10 text-center space-y-2">
+                            <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-red-300 uppercase tracking-widest leading-none drop-shadow-[0_2px_10px_rgba(239,68,68,0.5)]">{t('gameOver')}</h2>
+                            <p className="text-red-400/80 font-bold tracking-wider text-sm uppercase">{t('dangerShrinking')}</p>
                         </div>
 
-                        <div className="flex flex-col gap-3 w-full">
+                        <div className="flex flex-col gap-4 w-full mt-4 relative z-10">
                             <button
                                 onClick={handleRestart}
-                                className="w-full py-3 bg-white text-black font-bold rounded-xl hover:scale-105 transition-transform flex items-center justify-center gap-2"
+                                className="w-full py-4 bg-gradient-to-r from-red-600 hover:from-red-500 to-red-800 hover:to-red-600 text-white font-black uppercase tracking-widest rounded-2xl shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:shadow-[0_0_30px_rgba(239,68,68,0.6)] hover:-translate-y-1 transition-all duration-300 flex items-center justify-center gap-3 active:scale-95"
                             >
-                                <RefreshCw className="w-4 h-4" />
+                                <RefreshCw className="w-5 h-5" />
                                 {t('restartLevel')}
                             </button>
 
                             <button
                                 onClick={handleGoToDashboard}
-                                className="w-full py-3 bg-[#27272a] text-gray-300 font-bold rounded-xl border border-white/5 hover:bg-[#3f3f46] transition-colors"
+                                className="w-full py-4 bg-white/5 text-gray-300 font-bold uppercase tracking-widest rounded-2xl border border-white/10 hover:bg-white/10 hover:text-white transition-all duration-300 backdrop-blur-md active:scale-95"
                             >
                                 {t('goToDashboard')}
                             </button>
@@ -1245,141 +1573,94 @@ const GeminiSlingshot: React.FC = () => {
                 </div>
             )}
 
-            {/* DASHBOARD MODAL (Professional Dashboard) */}
+            {/* DASHBOARD MODAL — Mobile-First Premium Dashboard */}
             {isMenuOpen && (
-                <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4">
-                    {/* Widened Dashboard to max-w-4xl for Horizontal Layout */}
-                    <div className="w-full max-w-4xl bg-[#18181b] rounded-3xl border border-white/10 shadow-2xl overflow-hidden relative animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-                        {/* Header */}
-                        <div className="p-6 pb-0 flex justify-between items-start">
+                <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4">
+                    {/* Deep Blur Backdrop */}
+                    <div className="absolute inset-0 bg-black/85 backdrop-blur-3xl" onClick={toggleMenu}></div>
+
+                    <div className="w-full sm:max-w-lg md:max-w-2xl lg:max-w-4xl bg-zinc-950/90 sm:rounded-[2rem] rounded-t-[2rem] border-t border-x sm:border border-white/10 shadow-[0_-10px_40px_rgba(0,0,0,0.8)] sm:shadow-[0_30px_60px_rgba(0,0,0,0.8)] overflow-hidden relative animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[92vh] sm:max-h-[90vh] flex flex-col">
+
+                        {/* Top Gradient Bar */}
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 z-20"></div>
+                        {/* Ambient Glows */}
+                        <div className="absolute -top-20 -right-20 w-64 h-64 bg-purple-600/15 rounded-full blur-[80px] pointer-events-none"></div>
+                        <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-blue-600/15 rounded-full blur-[80px] pointer-events-none"></div>
+
+                        {/* Header — Compact for mobile */}
+                        <div className="px-5 sm:px-8 pt-5 sm:pt-6 pb-3 flex justify-between items-center border-b border-white/5 relative z-10 shrink-0">
                             <div>
-                                <h2 className="text-xl font-bold text-white">{t('dashboard')}</h2>
-                                <p className="text-xs text-gray-400 font-medium mt-1">{t('campaignProgress')}</p>
+                                <h2 className="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-indigo-200 to-gray-500 tracking-tight">{t('dashboard')}</h2>
+                                <p className="text-[10px] sm:text-xs text-indigo-400 font-bold mt-1 uppercase tracking-widest flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                                    {t('campaignProgress')}
+                                </p>
                             </div>
                             <button
                                 onClick={toggleMenu}
-                                className="p-2 bg-white/5 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                                className="p-2.5 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 text-gray-400 hover:text-white transition-all active:scale-90 group"
                             >
-                                <X className="w-5 h-5" />
+                                <X className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
                             </button>
                         </div>
 
-                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* LEFT COLUMN: Visuals & Progression */}
-                            <div className="space-y-6">
-                                {/* Performance Trends Chart */}
-                                <div className="p-4 bg-[#202022] rounded-xl border border-white/5">
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <TrendingUp className="w-4 h-4 text-purple-400" />
-                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t('performanceTrends')}</span>
+                        {/* Scrollable Content */}
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 sm:px-8 py-5 space-y-5 relative z-10">
+
+                            {/* === SECTION 1: Level Progress & World Map (Most important on mobile) === */}
+                            <div className="space-y-4">
+                                {/* LEVEL PROGRESS — Compact card */}
+                                <div className="bg-zinc-900/60 p-4 rounded-2xl border border-white/5">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <label className="text-xs text-gray-400 font-bold uppercase tracking-wider flex items-center gap-2">
+                                            <Star className="w-3.5 h-3.5 text-yellow-400" /> {t('level')} {currentLevel}
+                                        </label>
+                                        <span className="text-[10px] text-gray-500">{t('nextUnlock')} {MAX_LEVELS_PER_STAGE + 1}</span>
                                     </div>
-
-                                    <div className="relative h-32 w-full bg-black/30 rounded-lg border border-white/5 overflow-hidden">
-                                        {/* SVG Chart */}
-                                        <svg className="w-full h-full" preserveAspectRatio="none">
-                                            {/* Grid Lines */}
-                                            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                                            <line x1="0" y1="50%" x2="100%" y2="50%" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                                            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-
-                                            {/* Focus Line (Purple) */}
-                                            <path
-                                                d={`M 0,${100 - (metricsHistoryRef.current[0]?.focus || 0)} ` +
-                                                    metricsHistoryRef.current.map((p, i) =>
-                                                        `L ${(i / 30) * 100}%,${100 - p.focus}`
-                                                    ).join(' ')}
-                                                fill="none"
-                                                stroke="#a855f7"
-                                                strokeWidth="2"
-                                                className="opacity-80"
-                                            />
-
-                                            {/* Stress Line (Red) */}
-                                            <path
-                                                d={`M 0,${100 - (metricsHistoryRef.current[0]?.stress || 0)} ` +
-                                                    metricsHistoryRef.current.map((p, i) =>
-                                                        `L ${(i / 30) * 100}%,${100 - p.stress}`
-                                                    ).join(' ')}
-                                                fill="none"
-                                                stroke="#ef4444"
-                                                strokeWidth="2"
-                                                className="opacity-80"
-                                            />
-
-                                            {/* Event Markers */}
-                                            {metricsHistoryRef.current.map((p, i) => {
-                                                if (!p.event) return null;
-                                                const yPos = 100 - p.focus;
-                                                const color = p.event === 'score' ? '#fbbf24' : '#22c55e';
-                                                return (
-                                                    <circle
-                                                        key={i}
-                                                        cx={`${(i / 30) * 100}%`}
-                                                        cy={`${yPos}%`}
-                                                        r="3"
-                                                        fill={color}
-                                                        className="animate-pulse"
-                                                    />
-                                                );
-                                            })}
-                                        </svg>
-                                    </div>
-                                    <div className="flex justify-between mt-2 px-1">
-                                        <div className="flex gap-4">
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                                                <span className="text-[10px] text-gray-500 font-bold uppercase">{t('focus')}</span>
-                                            </div>
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                                                <span className="text-[10px] text-gray-500 font-bold uppercase">{t('stress')}</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                                            <span className="text-[10px] text-gray-500 font-bold uppercase">{t('events')}</span>
-                                        </div>
+                                    <div className="h-2.5 w-full bg-black/50 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 transition-all duration-500 rounded-full"
+                                            style={{ width: `${(currentLevel / MAX_LEVELS_PER_STAGE) * 100}%` }}
+                                        />
                                     </div>
                                 </div>
 
-                                {/* WORLD MAP */}
-                                <div>
+                                {/* WORLD MAP — Horizontal stage selector */}
+                                <div className="bg-zinc-900/60 p-4 rounded-2xl border border-white/5">
                                     <div className="flex justify-between items-center mb-3">
-                                        <label className="text-xs text-gray-500 font-bold uppercase tracking-wider flex items-center gap-2">
-                                            <Map className="w-3 h-3" /> {t('worldMap')}
+                                        <label className="text-xs text-gray-400 font-bold uppercase tracking-wider flex items-center gap-2">
+                                            <Map className="w-3.5 h-3.5" /> {t('worldMap')}
                                         </label>
                                         <span className="text-[10px] text-blue-400 font-bold uppercase bg-blue-500/10 px-2 py-0.5 rounded-full">
                                             {t('world')} {gameStage === 'sea' ? '1' : gameStage === 'island' ? '2' : '3'}
                                         </span>
                                     </div>
 
-                                    <div className="relative h-24 w-full bg-[#202022] rounded-xl border border-white/5 overflow-hidden flex items-center justify-around px-2">
-                                        {/* Background Line */}
-                                        <div className="absolute top-1/2 left-8 right-8 h-0.5 bg-white/10 -translate-y-1/2 z-0" />
+                                    <div className="relative h-20 w-full bg-black/30 rounded-xl overflow-hidden flex items-center justify-around px-4">
+                                        <div className="absolute top-1/2 left-10 right-10 h-0.5 bg-white/10 -translate-y-1/2 z-0" />
 
-                                        {(['sea', 'island', 'volcano'] as GameStage[]).map((stage, idx) => {
+                                        {(['sea', 'island', 'volcano'] as GameStage[]).map((stage) => {
                                             const isUnlocked = unlockedStages.includes(stage);
                                             const isActive = gameStage === stage;
 
                                             let Icon = Waves;
-                                            let colorClass = "text-blue-400";
                                             let bgClass = "bg-blue-500";
 
-                                            if (stage === 'island') { Icon = Anchor; colorClass = "text-teal-400"; bgClass = "bg-teal-500"; }
-                                            if (stage === 'volcano') { Icon = Flame; colorClass = "text-red-400"; bgClass = "bg-red-500"; }
+                                            if (stage === 'island') { Icon = Anchor; bgClass = "bg-teal-500"; }
+                                            if (stage === 'volcano') { Icon = Flame; bgClass = "bg-red-500"; }
 
                                             return (
                                                 <button
                                                     key={stage}
                                                     disabled={!isUnlocked}
                                                     onClick={() => handleStageSelect(stage)}
-                                                    className={`relative z-10 flex flex-col items-center gap-2 transition-all duration-300 
-                                                ${isActive ? 'scale-110 opacity-100' : ''}
-                                                ${!isUnlocked ? 'opacity-40 grayscale cursor-not-allowed' : 'hover:opacity-100 cursor-pointer'}
-                                            `}
+                                                    className={`relative z-10 flex flex-col items-center gap-1.5 transition-all duration-300
+                                                        ${isActive ? 'scale-110 opacity-100' : ''}
+                                                        ${!isUnlocked ? 'opacity-40 grayscale cursor-not-allowed' : 'cursor-pointer'}
+                                                    `}
                                                 >
-                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all 
-                                                ${isActive ? `${bgClass} border-white shadow-lg` : 'bg-[#27272a] border-white/20'}`}>
+                                                    <div className={`w-11 h-11 rounded-full flex items-center justify-center border-2 transition-all
+                                                        ${isActive ? `${bgClass} border-white shadow-[0_0_15px_rgba(255,255,255,0.3)]` : 'bg-zinc-800 border-white/20'}`}>
                                                         {isUnlocked ? (
                                                             <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-500'}`} />
                                                         ) : (
@@ -1394,43 +1675,95 @@ const GeminiSlingshot: React.FC = () => {
                                         })}
                                     </div>
                                 </div>
+                            </div>
 
-                                {/* LEVEL PROGRESS */}
-                                <div>
-                                    <div className="flex justify-between items-end mb-2">
-                                        <label className="text-xs text-gray-500 font-bold uppercase tracking-wider flex items-center gap-2">
-                                            <Star className="w-3 h-3" /> {t('level')} {currentLevel}
-                                        </label>
-                                        <span className="text-xs text-gray-500 font-normal">{t('nextUnlock')} {MAX_LEVELS_PER_STAGE + 1}</span>
-                                    </div>
-                                    <div className="h-2 w-full bg-[#27272a] rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
-                                            style={{ width: `${(currentLevel / MAX_LEVELS_PER_STAGE) * 100}%` }}
+                            {/* === SECTION 2: Performance Trends (Compact on mobile) === */}
+                            <div className="bg-zinc-900/60 p-4 rounded-2xl border border-white/5">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <TrendingUp className="w-4 h-4 text-purple-400" />
+                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t('performanceTrends')}</span>
+                                </div>
+
+                                <div className="relative h-24 sm:h-32 w-full bg-black/30 rounded-xl border border-white/5 overflow-hidden">
+                                    <svg className="w-full h-full" preserveAspectRatio="none">
+                                        <line x1="0" y1="25%" x2="100%" y2="25%" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                                        <line x1="0" y1="50%" x2="100%" y2="50%" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                                        <line x1="0" y1="75%" x2="100%" y2="75%" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+
+                                        <path
+                                            d={`M 0,${100 - (metricsHistoryRef.current[0]?.focus || 0)} ` +
+                                                metricsHistoryRef.current.map((p, i) =>
+                                                    `L ${(i / 30) * 100}%,${100 - p.focus}`
+                                                ).join(' ')}
+                                            fill="none"
+                                            stroke="#a855f7"
+                                            strokeWidth="2"
+                                            className="opacity-80"
                                         />
+
+                                        <path
+                                            d={`M 0,${100 - (metricsHistoryRef.current[0]?.stress || 0)} ` +
+                                                metricsHistoryRef.current.map((p, i) =>
+                                                    `L ${(i / 30) * 100}%,${100 - p.stress}`
+                                                ).join(' ')}
+                                            fill="none"
+                                            stroke="#ef4444"
+                                            strokeWidth="2"
+                                            className="opacity-80"
+                                        />
+
+                                        {metricsHistoryRef.current.map((p, i) => {
+                                            if (!p.event) return null;
+                                            const yPos = 100 - p.focus;
+                                            const color = p.event === 'score' ? '#fbbf24' : '#22c55e';
+                                            return (
+                                                <circle
+                                                    key={i}
+                                                    cx={`${(i / 30) * 100}%`}
+                                                    cy={`${yPos}%`}
+                                                    r="3"
+                                                    fill={color}
+                                                    className="animate-pulse"
+                                                />
+                                            );
+                                        })}
+                                    </svg>
+                                </div>
+                                <div className="flex justify-between mt-2 px-1">
+                                    <div className="flex gap-3">
+                                        <div className="flex items-center gap-1">
+                                            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                                            <span className="text-[9px] text-gray-500 font-bold uppercase">{t('focus')}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                                            <span className="text-[9px] text-gray-500 font-bold uppercase">{t('stress')}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                                        <span className="text-[9px] text-gray-500 font-bold uppercase">{t('events')}</span>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* RIGHT COLUMN: Settings & Controls */}
-                            <div className="space-y-6 flex flex-col">
+                            {/* === SECTION 3: Settings (Language + Difficulty in a row on mobile) === */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {/* LANGUAGE */}
-                                <div>
-                                    <div className="flex justify-between items-center mb-3">
-                                        <label className="text-xs text-gray-500 font-bold uppercase tracking-wider flex items-center gap-2">
-                                            <Languages className="w-3 h-3" /> {t('language')}
-                                        </label>
-                                    </div>
-                                    <div className="flex gap-2 bg-[#202022] p-1 rounded-xl">
+                                <div className="bg-zinc-900/60 p-4 rounded-2xl border border-white/5">
+                                    <label className="text-xs text-gray-400 font-bold uppercase tracking-wider flex items-center gap-2 mb-3">
+                                        <Languages className="w-3.5 h-3.5" /> {t('language')}
+                                    </label>
+                                    <div className="flex gap-2 bg-black/30 p-1 rounded-xl">
                                         <button
                                             onClick={() => handleLanguageChange('en')}
-                                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${language === 'en' ? 'bg-white text-black shadow' : 'text-gray-400 hover:text-white'}`}
+                                            className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${language === 'en' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                                         >
                                             English
                                         </button>
                                         <button
                                             onClick={() => handleLanguageChange('ar')}
-                                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all font-sans ${language === 'ar' ? 'bg-white text-black shadow' : 'text-gray-400 hover:text-white'}`}
+                                            className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all font-sans ${language === 'ar' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                                         >
                                             العربية
                                         </button>
@@ -1438,54 +1771,56 @@ const GeminiSlingshot: React.FC = () => {
                                 </div>
 
                                 {/* ASSIST MODE */}
-                                <div className="border-t border-white/5 pt-4">
-                                    <label className="text-xs text-gray-500 font-bold uppercase tracking-wider flex items-center gap-2 mb-2">
-                                        <Gauge className="w-3 h-3" /> {t('assistMode')}
+                                <div className="bg-zinc-900/60 p-4 rounded-2xl border border-white/5">
+                                    <label className="text-xs text-gray-400 font-bold uppercase tracking-wider flex items-center gap-2 mb-3">
+                                        <Gauge className="w-3.5 h-3.5" /> {t('assistMode')}
                                     </label>
-                                    <div className="grid grid-cols-3 gap-2 bg-black/20 p-1 rounded-xl">
+                                    <div className="grid grid-cols-3 gap-2 bg-black/30 p-1 rounded-xl">
                                         {(['easy', 'medium', 'hard'] as DifficultyLevel[]).map((level) => (
                                             <button
                                                 key={level}
                                                 onClick={() => handleDifficultyChange(level)}
-                                                className={`py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all
-                                            ${difficulty === level
+                                                className={`py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all
+                                                    ${difficulty === level
                                                         ? 'bg-white text-black shadow-lg'
                                                         : 'text-gray-500 hover:text-white hover:bg-white/5'}
-                                        `}
+                                                `}
                                             >
                                                 {t(level)}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
-
-                                {/* ACTION BUTTONS (Flex Fill) */}
-                                <div className="flex-1 flex flex-col gap-3 justify-end mt-4">
-                                    <button
-                                        onClick={() => handlePsychologyToggle(true)}
-                                        className="flex items-center justify-center gap-2 p-4 rounded-xl bg-gradient-to-br from-indigo-600/20 to-purple-600/20 hover:from-indigo-600/40 hover:to-purple-600/40 border border-indigo-500/30 transition-all group"
-                                    >
-                                        <Activity className="w-5 h-5 text-indigo-400 group-hover:text-indigo-200 transition-colors" />
-                                        <span className="text-xs font-bold text-indigo-100 uppercase tracking-wide">{t('playerAnalysis')}</span>
-                                    </button>
-
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <button
-                                            onClick={() => handleDebugToggle(true)}
-                                            className="flex items-center justify-center gap-2 p-4 rounded-xl bg-[#27272a] hover:bg-[#3f3f46] border border-white/5 transition-colors group"
-                                        >
-                                            <Terminal className="w-4 h-4 text-gray-400 group-hover:text-green-400 transition-colors" />
-                                            <span className="text-xs font-bold text-gray-300">{t('systemLogs')}</span>
-                                        </button>
-                                        <button
-                                            className="flex items-center justify-center gap-2 p-4 rounded-xl bg-[#27272a] border border-white/5 opacity-50 cursor-not-allowed"
-                                        >
-                                            <BarChart3 className="w-4 h-4 text-gray-400" />
-                                            <span className="text-xs font-bold text-gray-300">{t('leaderboard')}</span>
-                                        </button>
-                                    </div>
-                                </div>
                             </div>
+
+                            {/* === SECTION 4: Action Buttons === */}
+                            <div className="grid grid-cols-2 gap-3 pb-2">
+                                <button
+                                    onClick={() => handlePsychologyToggle(true)}
+                                    className="col-span-2 flex items-center justify-center gap-3 p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-indigo-600/30 to-purple-600/30 hover:from-indigo-600/50 hover:to-purple-600/50 border border-indigo-500/30 shadow-[0_8px_20px_rgba(79,70,229,0.2)] transition-all active:scale-[0.97] group"
+                                >
+                                    <div className="p-2 bg-indigo-500/30 rounded-full border border-indigo-400/40">
+                                        <Activity className="w-5 h-5 text-indigo-300 drop-shadow-[0_0_6px_rgba(129,140,248,0.8)]" />
+                                    </div>
+                                    <span className="text-xs sm:text-sm font-black text-white uppercase tracking-widest">{t('playerAnalysis')}</span>
+                                </button>
+
+                                <button
+                                    className="flex items-center justify-center gap-2 p-4 rounded-2xl bg-zinc-900/80 border border-white/5 opacity-50 cursor-not-allowed"
+                                >
+                                    <BarChart3 className="w-4 h-4 text-yellow-500/50" />
+                                    <span className="text-xs font-bold text-gray-400">{t('leaderboard')}</span>
+                                </button>
+
+                                <button
+                                    onClick={handleRestart}
+                                    className="flex items-center justify-center gap-2 p-4 rounded-2xl bg-zinc-900/80 hover:bg-zinc-800/90 border border-white/10 transition-all active:scale-95 group"
+                                >
+                                    <RefreshCw className="w-4 h-4 text-orange-400 group-hover:rotate-180 transition-transform duration-500" />
+                                    <span className="text-xs font-bold text-gray-300 group-hover:text-white">{t('restartLevel')}</span>
+                                </button>
+                            </div>
+
                         </div>
                     </div>
                 </div>
@@ -1493,24 +1828,29 @@ const GeminiSlingshot: React.FC = () => {
 
             {/* PSYCHOLOGY / ANALYSIS MODAL */}
             {showPsychology && (
-                <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 lg:p-8 animate-in fade-in duration-300">
+                    {/* Deep Blur Backdrop */}
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-2xl transition-opacity pointer-events-none"></div>
+
                     {/* Changed max-w-md to max-w-5xl for horizontal layout */}
-                    <div className="w-full max-w-5xl bg-[#18181b] rounded-3xl border border-white/10 shadow-2xl overflow-hidden relative flex flex-col md:flex-row max-h-[90vh]">
+                    <div className="w-full max-w-5xl glass-panel bg-black/60 rounded-[2.5rem] border border-white/10 border-t-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.5),inset_0_2px_10px_rgba(255,255,255,0.1)] overflow-hidden relative flex flex-col md:flex-row max-h-[90vh]">
+                        {/* High-Tech Decorative Elements */}
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 z-20"></div>
 
                         {/* LEFT PANEL: Header & Key Metrics */}
-                        <div className={`w-full md:w-1/3 bg-[#27272a] p-6 border-b md:border-b-0 ${isRTL ? 'md:border-l' : 'md:border-r'} border-white/5 flex flex-col gap-6`}>
+                        <div className={`w-full md:w-1/3 bg-black/40 backdrop-blur-3xl p-8 border-b md:border-b-0 ${isRTL ? 'md:border-l' : 'md:border-r'} border-white/10 flex flex-col gap-8 relative z-10`}>
                             {/* Header */}
                             <div className="flex justify-between items-start">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-3 bg-indigo-500/20 rounded-xl">
-                                        <Activity className="w-6 h-6 text-indigo-400" />
+                                <div className="flex items-center gap-4">
+                                    <div className="p-4 bg-indigo-500/20 rounded-2xl border border-indigo-500/30 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+                                        <Activity className="w-7 h-7 text-indigo-400 drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
                                     </div>
                                     <div>
-                                        <h2 className="text-xl font-bold text-white">{t('analysis')}</h2>
-                                        <p className="text-xs text-indigo-300/60 font-medium uppercase tracking-wider">{t('playerState')}</p>
+                                        <h2 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-gray-400 uppercase tracking-wide neon-text-purple">{t('analysis')}</h2>
+                                        <p className="text-xs text-indigo-400 font-bold uppercase tracking-widest mt-1">{t('playerState')}</p>
                                     </div>
                                 </div>
-                                <button onClick={() => setShowPsychology(false)} className="md:hidden p-2 hover:bg-white/10 rounded-lg text-gray-400">
+                                <button onClick={() => setShowPsychology(false)} className="md:hidden p-3 glass-panel rounded-2xl text-gray-400 hover:text-white transition-all transform hover:scale-105 active:scale-95">
                                     <X className="w-5 h-5" />
                                 </button>
                             </div>
