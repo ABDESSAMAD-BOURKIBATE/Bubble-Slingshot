@@ -1409,16 +1409,16 @@ const GeminiSlingshot: React.FC = () => {
 
                 {/* HUD: Interaction Controls Row (Menu, Tips, Fullscreen) */}
                 {!loading && (
-                    <div className="absolute bottom-32 left-0 w-full px-6 z-50 flex items-center justify-between pointer-events-none">
+                    <div className="absolute bottom-[9rem] sm:bottom-[11rem] left-0 w-full px-4 sm:px-6 z-50 flex items-center justify-between pointer-events-none">
                         {/* LEFT: Menu / Control HUB */}
                         <div className={`flex flex-1 ${isRTL ? 'justify-end' : 'justify-start'} pointer-events-auto`}>
                             <button
                                 onClick={toggleMenu}
-                                className={`flex items-center justify-center gap-3 px-5 py-3 rounded-2xl glass-panel text-white/90 hover:bg-white/10 hover:shadow-[0_0_25px_rgba(139,92,246,0.6)] hover:border-purple-400/60 hover:-translate-y-1 transition-all duration-300 active:scale-95 group shadow-[inset_0_1px_rgba(255,255,255,0.1),0_5px_15px_rgba(0,0,0,0.5)]`}
+                                className={`flex items-center justify-center gap-2 sm:gap-3 px-3 sm:px-5 py-2 sm:py-3 rounded-xl sm:rounded-2xl glass-panel text-white/90 hover:bg-white/10 hover:shadow-[0_0_25px_rgba(139,92,246,0.6)] hover:border-purple-400/60 hover:-translate-y-1 transition-all duration-300 active:scale-95 group shadow-[inset_0_1px_rgba(255,255,255,0.1),0_5px_15px_rgba(0,0,0,0.5)]`}
                                 title="Open Menu"
                             >
                                 <Menu className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500 text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
-                                <span className="text-[10px] font-black uppercase tracking-[0.2em] neon-text-purple">
+                                <span className="hidden sm:inline-block text-[10px] font-black uppercase tracking-[0.2em] neon-text-purple">
                                     {t('menu')}
                                 </span>
                             </button>
@@ -1431,7 +1431,7 @@ const GeminiSlingshot: React.FC = () => {
                         <div className={`flex flex-1 ${isRTL ? 'justify-start' : 'justify-end'} pointer-events-auto`}>
                             <button
                                 onClick={toggleFullscreen}
-                                className={`flex items-center justify-center gap-3 px-5 py-3 rounded-2xl glass-panel text-white/90 hover:bg-white/10 hover:shadow-[0_0_25px_rgba(59,130,246,0.6)] hover:border-blue-400/60 hover:-translate-y-1 transition-all duration-300 active:scale-95 group shadow-[inset_0_1px_rgba(255,255,255,0.1),0_5px_15px_rgba(0,0,0,0.5)]`}
+                                className={`flex items-center justify-center gap-2 sm:gap-3 px-3 sm:px-5 py-2 sm:py-3 rounded-xl sm:rounded-2xl glass-panel text-white/90 hover:bg-white/10 hover:shadow-[0_0_25px_rgba(59,130,246,0.6)] hover:border-blue-400/60 hover:-translate-y-1 transition-all duration-300 active:scale-95 group shadow-[inset_0_1px_rgba(255,255,255,0.1),0_5px_15px_rgba(0,0,0,0.5)]`}
                                 title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
                             >
                                 {isFullscreen ? (
@@ -1439,7 +1439,7 @@ const GeminiSlingshot: React.FC = () => {
                                 ) : (
                                     <Zap className="w-5 h-5 text-yellow-400 group-hover:scale-110 transition-transform drop-shadow-[0_0_10px_rgba(234,179,8,0.8)]" />
                                 )}
-                                <span className="text-[10px] font-black uppercase tracking-[0.2em] neon-text-blue">
+                                <span className="hidden sm:inline-block text-[10px] font-black uppercase tracking-[0.2em] neon-text-blue">
                                     {isFullscreen ? t('exit') : t('fullscreen')}
                                 </span>
                             </button>
@@ -1448,13 +1448,13 @@ const GeminiSlingshot: React.FC = () => {
                 )}
 
                 {/* HUD: Professional Glassmorphism Color Dock */}
-                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 w-full max-w-[95vw] md:max-w-auto flex justify-center pointer-events-none">
-                    <div className="flex items-center gap-4 glass-panel px-8 py-4 rounded-[2.5rem] overflow-x-auto no-scrollbar pointer-events-auto relative">
+                <div className="absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 z-40 w-full max-w-[95vw] md:max-w-auto flex justify-center pointer-events-none">
+                    <div className="flex items-center gap-3 sm:gap-4 glass-panel px-4 sm:px-8 py-3 sm:py-4 rounded-[2rem] sm:rounded-[2.5rem] overflow-x-auto no-scrollbar pointer-events-auto relative">
                         {/* Ambient Glow behind dock */}
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 rounded-[2.5rem] blur-xl pointer-events-none"></div>
 
                         {availableColors.length === 0 ? (
-                            <p className="text-sm text-gray-300 font-bold px-8 tracking-widest uppercase neon-text-blue">{t('levelCleared')}</p>
+                            <p className="text-xs sm:text-sm text-gray-300 font-bold px-4 sm:px-8 tracking-widest uppercase neon-text-blue">{t('levelCleared')}</p>
                         ) : (
                             COLOR_KEYS.filter(c => availableColors.includes(c)).map(color => {
                                 const isSelected = selectedColor === color;
@@ -1465,7 +1465,7 @@ const GeminiSlingshot: React.FC = () => {
                                     <button
                                         key={color}
                                         onClick={() => handleColorSelect(color)}
-                                        className={`relative w-10 h-10 rounded-full transition-all duration-500 transform flex items-center justify-center hover:-translate-y-2 group
+                                        className={`relative w-8 h-8 sm:w-10 sm:h-10 rounded-full transition-all duration-500 transform flex items-center justify-center hover:-translate-y-2 group
                                     ${isSelected ? 'scale-110 z-10' : 'opacity-70 hover:opacity-100 hover:scale-105'}
                                 `}
                                     >
@@ -1483,16 +1483,16 @@ const GeminiSlingshot: React.FC = () => {
 
                                         {/* Super Glossy Glass Reflections */}
                                         <div className="absolute inset-[1px] rounded-full border-[1.5px] border-white/50 pointer-events-none mix-blend-overlay" />
-                                        <div className="absolute top-0.5 left-1 w-5 h-3 bg-gradient-to-b from-white/90 to-transparent rounded-full transform -rotate-45 opacity-90 pointer-events-none mix-blend-overlay" />
-                                        <div className="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-white/40 blur-[1px] pointer-events-none" />
+                                        <div className="absolute top-0.5 left-1 w-4 h-2.5 sm:w-5 sm:h-3 bg-gradient-to-b from-white/90 to-transparent rounded-full transform -rotate-45 opacity-90 pointer-events-none mix-blend-overlay" />
+                                        <div className="absolute bottom-1 right-1 w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white/40 blur-[1px] pointer-events-none" />
 
                                         {isRecommended && !isSelected && (
-                                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gradient-to-br from-yellow-300 to-yellow-600 text-black text-[10px] font-black flex items-center justify-center rounded-full shadow-[0_0_15px_rgba(234,179,8,0.8)] border border-yellow-200 animate-bounce z-20">!</span>
+                                            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 sm:w-5 sm:h-5 bg-gradient-to-br from-yellow-300 to-yellow-600 text-black text-[8px] sm:text-[10px] font-black flex items-center justify-center rounded-full shadow-[0_0_15px_rgba(234,179,8,0.8)] border border-yellow-200 animate-bounce z-20">!</span>
                                         )}
 
                                         {isSelected && (
                                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30 animate-pulse-glow">
-                                                <MousePointerClick className="w-6 h-6 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" strokeWidth={3} />
+                                                <MousePointerClick className="w-4 h-4 sm:w-6 sm:h-6 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" strokeWidth={3} />
                                             </div>
                                         )}
                                     </button>
@@ -1502,19 +1502,11 @@ const GeminiSlingshot: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Pinch to Shoot Hint (Smaller, below the balls/dock) */}
-                {!loading && successfulShotsRef.current < 3 && !isPinching.current && !isFlying.current && !isAiThinking && !isMenuOpen && !isGameOver && (
-                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-1.5 rounded-full backdrop-blur-md bg-black/60 border border-white/10 shadow-[0_5px_15px_rgba(0,0,0,0.5)] transform animate-float-slow pointer-events-none">
-                        <div className="p-1 bg-blue-500/20 rounded-full animate-pulse">
-                            <Play className="w-2.5 h-2.5 text-blue-400 fill-current" />
-                        </div>
-                        <p className="text-white/80 text-[9px] font-black uppercase tracking-[0.2em]">{t('pinchToShoot')}</p>
-                    </div>
-                )}
+
 
                 {/* Tactical Guide Toast - AUTO HIDES - Professional Floating Pill */}
                 {aiHint && (
-                    <div className="absolute top-6 left-1/2 -translate-x-1/2 z-40 pointer-events-none transition-all duration-500 w-[90%] max-w-md">
+                    <div className="absolute bottom-[13rem] sm:bottom-[15rem] left-1/2 -translate-x-1/2 z-40 pointer-events-none transition-all duration-500 w-[90%] max-w-md">
                         <div
                             className="mx-auto bg-black/60 backdrop-blur-xl px-6 py-3 rounded-full border border-white/10 shadow-2xl flex items-center gap-4 animate-in slide-in-from-top-4"
                             style={{ borderLeft: `4px solid ${borderColor}` }}
