@@ -1,1 +1,1 @@
-if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/slingshot/sw.js', { scope: '/slingshot/' })})}
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/Bubble-Slingshot/sw.js', { scope: '/Bubble-Slingshot/' })})}
