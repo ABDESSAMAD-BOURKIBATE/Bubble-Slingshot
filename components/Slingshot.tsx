@@ -1503,7 +1503,7 @@ const GeminiSlingshot: React.FC = () => {
                 </div>
 
                 {/* Pinch to Shoot Hint (Smaller, below the balls/dock) */}
-                {successfulShotsRef.current < 3 && !isPinching.current && !isFlying.current && !isAiThinking && !isMenuOpen && !isGameOver && (
+                {!loading && successfulShotsRef.current < 3 && !isPinching.current && !isFlying.current && !isAiThinking && !isMenuOpen && !isGameOver && (
                     <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-1.5 rounded-full backdrop-blur-md bg-black/60 border border-white/10 shadow-[0_5px_15px_rgba(0,0,0,0.5)] transform animate-float-slow pointer-events-none">
                         <div className="p-1 bg-blue-500/20 rounded-full animate-pulse">
                             <Play className="w-2.5 h-2.5 text-blue-400 fill-current" />
